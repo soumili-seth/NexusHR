@@ -30,31 +30,76 @@ const emptyForm = {
 };
 
 function App() {
+  const [authHeader, setAuthHeader] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  async function login(event: React.FormEvent) {
+    event.preventDefault();
+    setLoginError("");
+
+    const encoded = "Basic " + btoa(`${username}:${password}`);
+
+    try {
+      const response = await fetch(API, {
+        headers: { Authorization: encoded },
+      });
+
+      if (!response.ok) {
+        throw new Error("Invalid username or password.");
+      }
+
+      const data = await response.json();
+
+      setAuthHeader(encoded);
+      setRole(username === "admin@nexushr.com" ? "ADMIN" : "HR");
+      setEmployees(data);
+      setPassword("");
+    } catch {
+      setLoginError("Login failed. Check your username, password and backend.");
+    }
+  }
+
+  function logout() {
+    setAuthHeader("");
+    setUsername("");
+    setPassword("");
+    setRole("");
+    setEmployees([]);
+  }
+
   async function loadEmployees() {
+    if (!authHeader) return;
+
     try {
       setLoading(true);
-      const response = await fetch(API);
-      if (!response.ok) throw new Error("Could not load employees");
-      const data = await response.json();
-      setEmployees(data);
+
+      const response = await fetch(API, {
+        headers: { Authorization: authHeader },
+      });
+
+      if (!response.ok) throw new Error("Could not load employees.");
+
+      setEmployees(await response.json());
       setError("");
     } catch {
-      setError("Cannot connect to the backend. Check that Spring Boot is running.");
+      setError("Could not load employees. Please check your connection.");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadEmployees();
-  }, []);
+    if (authHeader) loadEmployees();
+  }, [authHeader]);
 
   function handleChange(
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -66,7 +111,7 @@ function App() {
     setForm(emptyForm);
     setEditingId(null);
     setShowForm(true);
-}
+  }
 
   function openEditForm(employee: Employee) {
     setForm({
@@ -80,6 +125,7 @@ function App() {
       joiningDate: employee.joiningDate || "",
       employmentStatus: employee.employmentStatus || "ACTIVE",
     });
+
     setEditingId(employee.id);
     setShowForm(true);
   }
@@ -92,13 +138,16 @@ function App() {
         editingId ? `${API}/${editingId}` : API,
         {
           method: editingId ? "PUT" : "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: authHeader,
+          },
           body: JSON.stringify(form),
         }
       );
 
       if (!response.ok) {
-        throw new Error("Unable to save employee. Check the details.");
+        throw new Error("Unable to save employee.");
       }
 
       setShowForm(false);
@@ -106,18 +155,25 @@ function App() {
       setEditingId(null);
       await loadEmployees();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Something went wrong");
+      alert(err instanceof Error ? err.message : "Something went wrong.");
     }
   }
 
   async function deleteEmployee(id: number) {
+    if (role !== "ADMIN") return;
+
     if (!window.confirm("Are you sure you want to delete this employee?")) {
       return;
     }
 
     try {
-      const response = await fetch(`${API}/${id}`, { method: "DELETE" });
-      if (!response.ok) throw new Error("Unable to delete employee");
+      const response = await fetch(`${API}/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: authHeader },
+      });
+
+      if (!response.ok) throw new Error("Unable to delete employee.");
+
       await loadEmployees();
     } catch {
       alert("Could not delete employee.");
@@ -131,6 +187,49 @@ function App() {
   const departments = new Set(
     employees.map((employee) => employee.department).filter(Boolean)
   ).size;
+
+  if (!authHeader) {
+    return (
+      <div className="login-page">
+        <form className="login-card" onSubmit={login}>
+          <div className="brand-icon">N</div>
+          <h1>NexusHR</h1>
+          <p>Workforce Intelligence Platform</p>
+
+          <h2>Welcome back</h2>
+          <p>Sign in to access your workspace.</p>
+
+          <label>
+            Email Address
+            <input
+              type="email"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter your email"
+              required
+            />
+          </label>
+
+          <label>
+            Password
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
+              required
+            />
+          </label>
+
+          {loginError && <div className="error">{loginError}</div>}
+
+          <button className="primary-btn" type="submit">
+            Sign In
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -152,11 +251,16 @@ function App() {
         <div className="nav-item">◈ &nbsp; Performance</div>
 
         <div className="sidebar-bottom">
-          <div className="profile-avatar">HR</div>
-          <div>
-            <strong>HR Administrator</strong>
-            <span>System Admin</span>
+          <div className="profile-avatar">
+            {role === "ADMIN" ? "AD" : "HR"}
           </div>
+          <div>
+            <strong>{role === "ADMIN" ? "Administrator" : "HR User"}</strong>
+            <span>{role} Account</span>
+          </div>
+          <button className="action-btn" onClick={logout}>
+            Logout
+          </button>
         </div>
       </aside>
 
@@ -267,12 +371,14 @@ function App() {
                         >
                           Edit
                         </button>
-                        <button
-                          className="delete-btn"
-                          onClick={() => deleteEmployee(employee.id)}
-                        >
-                          Delete
-                        </button>
+                        {role === "ADMIN" && (
+                          <button
+                            className="delete-btn"
+                            onClick={() => deleteEmployee(employee.id)}
+                          >
+                            Delete
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -343,7 +449,11 @@ function App() {
               </div>
 
               <div className="form-actions">
-                <button type="button" className="secondary-btn" onClick={() => setShowForm(false)}>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => setShowForm(false)}
+                >
                   Cancel
                 </button>
                 <button type="submit" className="primary-btn">
