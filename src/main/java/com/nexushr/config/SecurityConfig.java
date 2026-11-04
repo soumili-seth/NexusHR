@@ -1,10 +1,15 @@
 
 package com.nexushr.config;
 
+import com.nexushr.security.JwtAuthenticationFilter;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
@@ -13,6 +18,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -29,14 +35,13 @@ public class SecurityConfig {
 
     @Bean
     public UserDetailsService userDetailsService(
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            @Value("${NEXUS_ADMIN_PASSWORD:}") String adminPassword,
+            @Value("${NEXUS_HR_PASSWORD:}") String hrPassword) {
 
-        String adminPassword = System.getenv("NEXUS_ADMIN_PASSWORD");
-        String hrPassword = System.getenv("NEXUS_HR_PASSWORD");
-
-        if (adminPassword == null || hrPassword == null) {
+        if (adminPassword.isBlank() || hrPassword.isBlank()) {
             throw new IllegalStateException(
-                "Set NEXUS_ADMIN_PASSWORD and NEXUS_HR_PASSWORD first."
+                    "Set NEXUS_ADMIN_PASSWORD and NEXUS_HR_PASSWORD first."
             );
         }
 
@@ -54,61 +59,84 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http)
+    public AuthenticationManager authenticationManager(
+            AuthenticationConfiguration configuration)
+            throws Exception {
+
+        return configuration.getAuthenticationManager();
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtAuthenticationFilter jwtAuthenticationFilter)
             throws Exception {
 
         http
             .cors(Customizer.withDefaults())
             .csrf(csrf -> csrf.disable())
+
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            
 
-.authorizeHttpRequests(auth -> auth
-    // Allow browser CORS preflight requests
-    .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+            .authorizeHttpRequests(auth -> auth
 
-    // Only ADMIN can delete onboarding records
-    .requestMatchers(HttpMethod.DELETE, "/api/onboarding/**")
-        .hasRole("ADMIN")
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-    // Only ADMIN can delete performance reviews
-    .requestMatchers(HttpMethod.DELETE, "/api/performance/**")
-        .hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/auth/login")
+                    .permitAll()
 
-    // All remaining API endpoints require ADMIN or HR
-    .requestMatchers("/api/**")
-        .hasAnyRole("ADMIN", "HR")
+                .requestMatchers(HttpMethod.DELETE, "/api/onboarding/**")
+                    .hasRole("ADMIN")
 
-    // Non-API resources such as frontend assets remain accessible
-    .anyRequest().permitAll()
-)
+                .requestMatchers(HttpMethod.DELETE, "/api/performance/**")
+                    .hasRole("ADMIN")
 
-            
-            .httpBasic(Customizer.withDefaults());
+                .requestMatchers("/api/**")
+                    .hasAnyRole("ADMIN", "HR")
+
+                .anyRequest().permitAll()
+            )
+
+            .httpBasic(basic -> basic.disable())
+            .formLogin(form -> form.disable())
+
+            .addFilterBefore(
+                jwtAuthenticationFilter,
+                UsernamePasswordAuthenticationFilter.class
+            );
 
         return http.build();
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+
         CorsConfiguration configuration = new CorsConfiguration();
 
         configuration.setAllowedOrigins(
-            List.of(
-    "http://localhost:5173",
-    "http://localhost:5174"
-)
+                List.of(
+                        "http://localhost:5173",
+                        "http://localhost:5174",
+                        "http://localhost:5175",
+                        "http://localhost:5176",
+                         "http://localhost:5177"
+                )
         );
-       configuration.setAllowedMethods(
-    List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-);
+
+        configuration.setAllowedMethods(
+                List.of(
+                        "GET", "POST", "PUT",
+                        "PATCH", "DELETE", "OPTIONS"
+                )
+        );
+
         configuration.setAllowedHeaders(
-            List.of("Authorization", "Content-Type")
+                List.of("Authorization", "Content-Type")
         );
 
         UrlBasedCorsConfigurationSource source =
-            new UrlBasedCorsConfigurationSource();
+                new UrlBasedCorsConfigurationSource();
 
         source.registerCorsConfiguration("/**", configuration);
 

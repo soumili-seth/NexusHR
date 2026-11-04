@@ -74,30 +74,63 @@ function App() {
   const [error, setError] = useState("");
 
   async function login(event: React.FormEvent) {
-    event.preventDefault();
-    setLoginError("");
+  event.preventDefault();
+  setLoginError("");
 
-    const encoded = "Basic " + btoa(`${username}:${password}`);
-
-    try {
-      const response = await fetch(API, {
-        headers: { Authorization: encoded },
-      });
-
-      if (!response.ok) {
-        throw new Error("Invalid username or password.");
+  try {
+    // Step 1: Authenticate with the backend
+    const loginResponse = await fetch(
+      "http://localhost:8080/api/auth/login",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: username.trim(),
+          password: password,
+        }),
       }
+    );
 
-      const data = await response.json();
-
-      setAuthHeader(encoded);
-      setRole(username === "admin@nexushr.com" ? "ADMIN" : "HR");
-      setEmployees(data);
-      setPassword("");
-    } catch {
-      setLoginError("Login failed. Check your username, password and backend.");
+    if (!loginResponse.ok) {
+      throw new Error("Invalid username or password.");
     }
+
+    const data: {
+      token: string;
+      tokenType: string;
+      expiresIn: number;
+      email: string;
+      roles: string[];
+    } = await loginResponse.json();
+
+    // Step 2: Identify the role returned by Spring Security
+    const userRole = data.roles.find(
+      (authority) =>
+        authority === "ROLE_ADMIN" ||
+        authority === "ROLE_HR"
+    );
+
+    if (!userRole || !data.token) {
+      throw new Error("Invalid authentication response.");
+    }
+
+    // Step 3: Create the JWT Bearer authentication header
+    const bearerHeader = `${data.tokenType || "Bearer"} ${data.token}`;
+
+    // Step 4: Update application authentication state
+    setAuthHeader(bearerHeader);
+    setRole(userRole === "ROLE_ADMIN" ? "ADMIN" : "HR");
+    setPassword("");
+
+  } catch (error) {
+    console.error("Login failed:", error);
+    setLoginError(
+      "Login failed. Check your credentials and backend connection."
+    );
   }
+}
 
   function logout() {
     setAuthHeader("");

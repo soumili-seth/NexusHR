@@ -7,13 +7,13 @@ import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest
 @TestPropertySource(properties = {
-    "NEXUS_ADMIN_PASSWORD=test-admin-password",
-    "NEXUS_HR_PASSWORD=test-hr-password"
+        "NEXUS_ADMIN_PASSWORD=test-admin-password",
+        "NEXUS_HR_PASSWORD=test-hr-password",
+        "app.jwt.secret=VGhpc0lzQVRlc3RPbmx5SldUU2VjcmV0S2V5Rm9yTmV4dXNIUjIwMjY="
 })
 class NexushrApplicationTests {
 
     @Test
     void contextLoads() {
     }
-
 }
