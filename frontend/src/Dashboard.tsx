@@ -51,6 +51,17 @@ interface Onboarding {
   };
 }
 
+interface AttritionRisk {
+  employeeId: number;
+  employeeCode: string;
+  employeeName: string;
+  department: string;
+  designation: string;
+  riskScore: number;
+  riskLevel: string;
+  riskFactors: string[];
+}
+
 interface DashboardProps {
   authHeader: string;
   employees: Employee[];
@@ -100,10 +111,10 @@ function Dashboard({ authHeader, employees }: DashboardProps) {
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [reviews, setReviews] = useState<Performance[]>([]);
   const [onboarding, setOnboarding] = useState<Onboarding[]>([]);
+  const [attritionRisks, setAttritionRisks] = useState<AttritionRisk[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Stores the date and time of the latest dashboard refresh
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
   async function loadDashboard() {
@@ -116,6 +127,11 @@ function Dashboard({ authHeader, employees }: DashboardProps) {
       { name: "Payroll", url: `${API}/payroll`, setter: setPayrolls },
       { name: "Performance", url: `${API}/performance`, setter: setReviews },
       { name: "Onboarding", url: `${API}/onboarding`, setter: setOnboarding },
+      {
+        name: "Attrition Analysis",
+        url: `${API}/attrition/analysis`,
+        setter: setAttritionRisks,
+      },
     ];
 
     const results = await Promise.allSettled(
@@ -253,18 +269,31 @@ function Dashboard({ authHeader, employees }: DashboardProps) {
   ).size;
 
   // Department-wise employee distribution
-const departmentDistribution = Object.entries(
-  employees.reduce<Record<string, number>>((counts, employee) => {
-    const department = employee.department?.trim() || "Unassigned";
+  const departmentDistribution = Object.entries(
+    employees.reduce<Record<string, number>>((counts, employee) => {
+      const department = employee.department?.trim() || "Unassigned";
 
-    counts[department] = (counts[department] || 0) + 1;
+      counts[department] = (counts[department] || 0) + 1;
 
-    return counts;
-  }, {})
-).map(([department, count]) => ({
-  department,
-  count,
-}));
+      return counts;
+    }, {})
+  ).map(([department, count]) => ({
+    department,
+    count,
+  }));
+
+  // Attrition risk calculations
+  const lowRiskEmployees = attritionRisks.filter(
+    (employee) => employee.riskLevel === "LOW"
+  ).length;
+
+  const mediumRiskEmployees = attritionRisks.filter(
+    (employee) => employee.riskLevel === "MEDIUM"
+  ).length;
+
+  const highRiskEmployees = attritionRisks.filter(
+    (employee) => employee.riskLevel === "HIGH"
+  ).length;
 
   // Recent activity calculations
   const recentActivities: Activity[] = [
@@ -378,7 +407,7 @@ const departmentDistribution = Object.entries(
         </div>
       </section>
 
-            {/* Department-wise Employee Distribution */}
+      {/* Department-wise Employee Distribution */}
       <section className="dashboard-chart-card">
         <h3>Department-wise Employee Distribution</h3>
         <p>Number of employees in each department</p>
@@ -619,6 +648,89 @@ const departmentDistribution = Object.entries(
           value={completed}
           total={onboarding.length}
         />
+      </section>
+
+      {/* Attrition Risk Analysis */}
+      <section className="dashboard-section">
+        <div className="dashboard-section-heading">
+          <h2>Attrition Risk Analysis</h2>
+          <span>Rule-based employee risk indicators</span>
+        </div>
+
+        <div className="dashboard-grid">
+          <div className="dashboard-card">
+            <span>Employees Analysed</span>
+            <h3>{attritionRisks.length}</h3>
+            <small>Active employees</small>
+          </div>
+
+          <div className="dashboard-card">
+            <span>Low Risk</span>
+            <h3>{lowRiskEmployees}</h3>
+            <small>Risk score below 30</small>
+          </div>
+
+          <div className="dashboard-card">
+            <span>Medium Risk</span>
+            <h3>{mediumRiskEmployees}</h3>
+            <small>Risk score 30–59</small>
+          </div>
+
+          <div className="dashboard-card">
+            <span>High Risk</span>
+            <h3>{highRiskEmployees}</h3>
+            <small>Risk score 60 or above</small>
+          </div>
+        </div>
+
+        <div className="dashboard-chart-card">
+          <h3>Employee Attrition Risk Details</h3>
+          <p>
+            Scores are indicative rule-based estimates, not validated
+            predictions of employee resignation.
+          </p>
+
+          {attritionRisks.length === 0 ? (
+            <p>No attrition analysis data available.</p>
+          ) : (
+            <div className="dashboard-activity-list">
+              {attritionRisks.map((employee) => (
+                <div
+                  className="dashboard-activity-item"
+                  key={employee.employeeId}
+                >
+                  <div>
+                    <strong>
+                      {employee.employeeName} ({employee.employeeCode})
+                    </strong>
+
+                    <p>
+                      {employee.department} · {employee.designation}
+                    </p>
+
+                    <p>
+                      Risk factors:{" "}
+                      {employee.riskFactors.length > 0
+                        ? employee.riskFactors.join(", ")
+                        : "No risk factors identified"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <strong>{employee.riskScore}/100</strong>
+                    <p>
+                      <span
+                        className={`attrition-risk-${employee.riskLevel.toLowerCase()}`}
+                      >
+                        {employee.riskLevel} RISK
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
       {/* Recent Activity */}

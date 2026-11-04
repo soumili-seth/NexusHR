@@ -1,3 +1,4 @@
+
 package com.nexushr.repository;
 
 import com.nexushr.entity.Performance;
@@ -7,4 +8,6 @@ import java.util.List;
 public interface PerformanceRepository extends JpaRepository<Performance, Long> {
 
     List<Performance> findByEmployeeId(Long employeeId);
+
+    List<Performance> findByEmployeeIdOrderByReviewDateDesc(Long employeeId);
 }

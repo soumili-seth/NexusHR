@@ -764,3 +764,54 @@ th {
     padding: 10px 13px;
   }
 }
+
+
+/* =================================
+   ATTRITION RISK ANALYSIS
+================================= */
+
+.attrition-risk-low,
+.attrition-risk-medium,
+.attrition-risk-high {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.attrition-risk-low {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.attrition-risk-medium {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.attrition-risk-high {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.dashboard-activity-item > div:last-child {
+  text-align: right;
+  min-width: 90px;
+}
+
+.dashboard-activity-item > div:last-child strong {
+  font-size: 17px;
+}
+
+@media (max-width: 600px) {
+  .dashboard-activity-item {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .dashboard-activity-item > div:last-child {
+    text-align: left;
+  }
+}
