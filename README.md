@@ -1,10 +1,10 @@
 # NexusHR – AI-Enabled Enterprise HR & Workforce Intelligence Platform
 
-NexusHR is a web-based Human Resource Management System designed to help organizations manage employee information and core HR operations through a centralized dashboard.
+NexusHR is a full-stack Human Resource Management System designed to centralize employee information and streamline essential HR operations through a unified dashboard.
 
-The application provides employee management, attendance tracking, leave management, payroll processing, performance reviews, employee onboarding, and preliminary rule-based attrition risk indicators.
+The platform provides employee management, attendance tracking, leave management, payroll processing, performance reviews, employee onboarding, and preliminary rule-based attrition risk analysis.
 
-## 1. Features
+## 1. Key Features
 
 ### Employee Management
 - View and manage employee records.
@@ -12,10 +12,10 @@ The application provides employee management, attendance tracking, leave managem
 
 ### Attendance Management
 - Record and view employee attendance.
-- Track attendance dates and statuses.
+- Track attendance dates and attendance statuses.
 
 ### Leave Management
-- Submit and manage leave records.
+- Submit and manage employee leave records.
 - Track pending and reviewed leave applications.
 
 ### Payroll Management
@@ -27,7 +27,7 @@ The application provides employee management, attendance tracking, leave managem
 - Track ratings, review periods, feedback, and goals.
 
 ### Employee Onboarding
-- Manage onboarding records and checklist progress.
+- Manage employee onboarding records and checklist progress.
 - Update onboarding status and completion dates.
 
 ### Dashboard and Analytics
@@ -37,19 +37,21 @@ The application provides employee management, attendance tracking, leave managem
 
 ### Attrition Risk Analysis
 - Analyses attendance, leave applications, performance ratings, and employee tenure.
-- Displays a preliminary risk score, risk level, and contributing factors.
-- Uses a rule-based scoring approach. It is not a trained machine-learning model or a validated prediction of employee resignation.
+- Displays preliminary risk scores, risk levels, and contributing factors.
+- Uses a rule-based scoring approach, not a trained machine-learning model.
 
 ## 2. Technology Stack
 
-| Layer | Technologies |
+| Category | Technologies |
 |---|---|
 | Backend | Java 21, Spring Boot |
 | Frontend | React 19, TypeScript, Vite |
-| Database | PostgreSQL 18 |
+| Database | PostgreSQL |
 | Persistence | Spring Data JPA, Hibernate |
-| Security | Spring Security, BCrypt, HTTP Basic Authentication |
-| Build tools | Maven, npm |
+| Security | Spring Security, JWT, BCrypt |
+| Build Tools | Maven, npm |
+| Version Control | Git, GitHub |
+| CI/CD | GitHub Actions |
 
 ## 3. Project Structure
 
@@ -63,7 +65,8 @@ NexusHR/
 │   │   │   ├── repository/
 │   │   │   ├── entity/
 │   │   │   ├── dto/
-│   │   │   └── config/
+│   │   │   ├── config/
+│   │   │   └── security/
 │   │   └── resources/
 │   │       └── application.properties
 │   └── test/
@@ -80,7 +83,7 @@ NexusHR/
 
 ## 4. Prerequisites
 
-Install the following before running the application:
+Install the following tools:
 
 - Java Development Kit (JDK) 21
 - PostgreSQL
@@ -89,16 +92,14 @@ Install the following before running the application:
 
 ## 5. Database Configuration
 
-1. Start PostgreSQL.
-2. Open pgAdmin.
+1. Start the PostgreSQL service.
+2. Open pgAdmin or your preferred PostgreSQL client.
 3. Create a database named `nexushr_db`.
-4. Configure the database connection in `src/main/resources/application.properties`.
+4. Configure the database credentials using environment variables.
 
-The application uses environment variables for database credentials:
+The application uses the following database configuration:
 
 ```properties
-spring.application.name=nexushr
-
 spring.datasource.url=${DB_URL:jdbc:postgresql://localhost:5432/nexushr_db}
 spring.datasource.username=${DB_USERNAME:postgres}
 spring.datasource.password=${DB_PASSWORD}
@@ -110,25 +111,27 @@ spring.jpa.show-sql=true
 spring.jpa.properties.hibernate.format_sql=true
 ```
 
-Set the database password in your local PowerShell session:
+Set the database password in PowerShell:
 
 ```powershell
-$securePassword = Read-Host "Enter PostgreSQL password" -AsSecureString
-$env:DB_PASSWORD = [System.Net.NetworkCredential]::new("", $securePassword).Password
+$env:DB_PASSWORD = Read-Host "Enter PostgreSQL password"
 ```
 
-Do not commit actual passwords or credentials to GitHub.
+Do not commit database passwords or other credentials to GitHub.
 
 ## 6. Backend Setup
 
-From the project root directory, configure the authentication credentials in PowerShell:
+Open PowerShell in the project root directory.
+
+Configure the application credentials:
 
 ```powershell
-$env:NEXUS_ADMIN_PASSWORD = "your-admin-password"
-$env:NEXUS_HR_PASSWORD = "your-hr-password"
+$env:NEXUS_ADMIN_PASSWORD = Read-Host "Enter admin password"
+$env:NEXUS_HR_PASSWORD = Read-Host "Enter HR password"
+$env:JWT_SECRET = Read-Host "Enter Base64-encoded JWT secret"
 ```
 
-Replace the example values with strong local passwords.
+The JWT secret must be Base64-encoded and contain at least 32 decoded bytes.
 
 Run the backend:
 
@@ -154,82 +157,142 @@ Open the local URL displayed by Vite, usually:
 
 `http://localhost:5173`
 
-If that port is already occupied, Vite may use another port, such as 5174.
+If that port is occupied, Vite may select another available port.
 
 ## 8. Authentication and Authorization
 
-The application uses Spring Security with HTTP Basic Authentication and BCrypt password encoding.
+NexusHR uses Spring Security with JWT-based authentication.
 
-Configured users:
+Security implementation includes:
+
+- User authentication through the login API.
+- JWT token generation and validation.
+- BCrypt password encoding.
+- Role-based authorization for ADMIN and HR users.
+- Stateless session management.
+- Bearer token authentication for protected API requests.
+
+### Configured user roles
 
 | Username | Role |
 |---|---|
 | admin@nexushr.com | ADMIN |
 | hr@nexushr.com | HR |
 
-Both accounts require passwords supplied through environment variables.
+Passwords are supplied through environment variables and are not stored as plaintext in the source code.
+
+### Login API
+
+`POST /api/auth/login`
+
+Example request:
+
+```json
+{
+  "email": "admin@nexushr.com",
+  "password": "your-admin-password"
+}
+```
+
+A successful login returns a JWT access token and user role information.
+
+Protected API requests use the following authorization header:
+
+`Authorization: Bearer <JWT_TOKEN>`
 
 Administrative authorization is required for selected delete operations, including onboarding and performance records.
 
-**Note:** The current implementation uses HTTP Basic Authentication. JWT-based authentication is not implemented.
+## 9. Attrition Risk Analysis
 
-## 9. Attrition Risk Calculation
+The current attrition analysis uses rule-based business logic based on:
 
-The current attrition analysis uses configurable business rules based on:
-
-- Recent employee absenteeism.
-- Multiple pending leave applications.
+- Employee absenteeism.
+- Pending leave applications.
 - Latest performance rating.
 - Employee tenure.
 
-The service assigns a score between 0 and 100 and classifies employees as LOW, MEDIUM, or HIGH risk.
+The service assigns a score between 0 and 100 and classifies employees into LOW, MEDIUM, or HIGH risk categories.
 
-These indicators are intended for demonstration and preliminary HR analysis. They should not be treated as validated employee attrition predictions or used as the sole basis for employment decisions.
+These indicators are intended for demonstration and preliminary HR analysis. They are not validated predictions of employee resignation and should not be used as the sole basis for employment decisions.
 
 ## 10. Testing and Build Verification
 
-Backend verification:
+### Backend verification
+
+Run from the project root:
 
 ```powershell
 .\mvnw.cmd clean verify
 ```
 
-Frontend production build:
-
-```powershell
-cd frontend
-npm run build
-```
-
-The backend verification completed successfully with:
+The local backend verification completed successfully with:
 
 - 1 test executed.
 - 0 failures.
 - 0 errors.
+- Spring Boot application context loaded successfully.
 - Executable Spring Boot JAR generated.
 
-The frontend production build also completed successfully.
+### Frontend production build
+
+Run from the frontend directory:
+
+```powershell
+npm run build
+```
+
+The frontend TypeScript checks and Vite production build completed successfully.
 
 ## 11. Continuous Integration
 
-A GitHub Actions workflow is configured under:
+NexusHR includes a GitHub Actions workflow:
 
 `.github/workflows/ci.yml`
 
-It performs backend packaging and frontend dependency installation and production build checks.
+The workflow is triggered by:
+
+- Pushes to the `main` branch.
+- Pull requests targeting the `main` branch.
+
+It contains two independent jobs:
+
+**Backend Build**
+- Checks out the repository.
+- Sets up Java 21.
+- Uses Maven dependency caching.
+- Packages the Spring Boot backend.
+
+**Frontend Build**
+- Checks out the repository.
+- Sets up Node.js 22.
+- Installs dependencies using `npm ci`.
+- Runs the Vite production build.
+
+The current automated backend CI job uses `-DskipTests`; local Maven verification is performed separately.
 
 ## 12. Future Enhancements
 
 Potential improvements include:
 
-- JWT-based authentication.
-- Machine-learning-based attrition prediction using suitable validated data.
+- Machine-learning-based attrition analysis using suitable validated datasets.
 - Real-time notifications.
 - Redis-based caching.
-- Automated API and integration test coverage.
+- Expanded automated API and integration test coverage.
 - Docker-based deployment and cloud hosting.
 - Monitoring and performance analytics.
+- Additional scalability and performance improvements.
 
-## 13. Project Purpose
+## 13. Project Purpose and Learning Outcomes
 
-NexusHR demonstrates the development of a full-stack HR management application using Java, Spring Boot, React, TypeScript, and PostgreSQL. It brings multiple HR workflows together and provides a foundation for further enterprise-level enhancements.
+NexusHR demonstrates the development of a full-stack HR management application using Java, Spring Boot, React, TypeScript, and PostgreSQL.
+
+The project brings multiple HR workflows together through a centralized platform and demonstrates practical implementation of:
+
+- Full-stack application development.
+- REST API integration.
+- Relational database management.
+- Authentication and role-based authorization.
+- Frontend and backend integration.
+- Build verification and continuous integration.
+
+The platform provides a foundation for further enterprise-oriented development and enhancement.
