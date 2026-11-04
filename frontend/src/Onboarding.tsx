@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from "react";
+import { API_BASE } from "./api";
 
 interface Employee {
   id: number;
@@ -28,7 +29,7 @@ interface OnboardingProps {
   employees: Employee[];
 }
 
-const API = "http://localhost:8080/api/onboarding";
+const API = `${API_BASE}/api/onboarding`;
 
 function Onboarding({ authHeader, employees }: OnboardingProps) {
   const [records, setRecords] = useState<OnboardingRecord[]>([]);

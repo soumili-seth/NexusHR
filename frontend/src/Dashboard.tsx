@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from "react";
+import { API_BASE } from "./api";
 
 interface Employee {
   id: number;
@@ -80,7 +81,7 @@ interface ChartBarProps {
   total: number;
 }
 
-const API = "http://localhost:8080/api";
+const API = `${API_BASE}/api`;
 
 function ChartBar({ label, value, total }: ChartBarProps) {
   const percentage =

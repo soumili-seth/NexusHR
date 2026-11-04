@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from "react";
+import { API_BASE } from "./api";
 
 interface Employee {
   id: number;
@@ -26,7 +27,7 @@ interface Props {
   employees: Employee[];
 }
 
-const API = "http://localhost:8080/api/performance";
+const API = `${API_BASE}/api/performance`;
 
 function Performance({ authHeader, employees }: Props) {
   const [reviews, setReviews] = useState<PerformanceReview[]>([]);

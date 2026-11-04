@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from "react";
+import { API_BASE } from "./api";
 
 interface PayrollRecord {
   id: number;
@@ -28,7 +29,7 @@ interface PayrollProps {
   authHeader: string;
 }
 
-const API = "http://localhost:8080/api";
+const API = `${API_BASE}/api`;
 
 function Payroll({ authHeader }: PayrollProps) {
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>([]);
@@ -193,15 +194,15 @@ function Payroll({ authHeader }: PayrollProps) {
           </button>
 
           <button
-  type="button"
-  className="primary-btn"
-  onClick={() => {
-    setShowForm(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }}
->
-  + Generate Payroll
-</button>
+            type="button"
+            className="primary-btn"
+            onClick={() => {
+              setShowForm(true);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          >
+            + Generate Payroll
+          </button>
         </div>
       </div>
 

@@ -5,6 +5,7 @@ import Payroll from "./Payroll";
 import Performance from "./Performance";
 import Onboarding from "./Onboarding";
 import Dashboard from "./Dashboard";
+import { API_BASE } from "./api";
 
 interface Employee {
   id: number;
@@ -41,7 +42,7 @@ interface Leave {
   reviewedBy: string | null;
 }
 
-const API = "http://localhost:8080/api/employees";
+const API = `${API_BASE}/api/employees`;
 
 const emptyForm = {
   employeeCode: "",
@@ -74,63 +75,58 @@ function App() {
   const [error, setError] = useState("");
 
   async function login(event: React.FormEvent) {
-  event.preventDefault();
-  setLoginError("");
+    event.preventDefault();
+    setLoginError("");
 
-  try {
-    // Step 1: Authenticate with the backend
-    const loginResponse = await fetch(
-      "http://localhost:8080/api/auth/login",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: username.trim(),
-          password: password,
-        }),
+    try {
+      const loginResponse = await fetch(
+        `${API_BASE}/api/auth/login`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: username.trim(),
+            password: password,
+          }),
+        }
+      );
+
+      if (!loginResponse.ok) {
+        throw new Error("Invalid username or password.");
       }
-    );
 
-    if (!loginResponse.ok) {
-      throw new Error("Invalid username or password.");
+      const data: {
+        token: string;
+        tokenType: string;
+        expiresIn: number;
+        email: string;
+        roles: string[];
+      } = await loginResponse.json();
+
+      const userRole = data.roles.find(
+        (authority) =>
+          authority === "ROLE_ADMIN" ||
+          authority === "ROLE_HR"
+      );
+
+      if (!userRole || !data.token) {
+        throw new Error("Invalid authentication response.");
+      }
+
+      const bearerHeader = `${data.tokenType || "Bearer"} ${data.token}`;
+
+      setAuthHeader(bearerHeader);
+      setRole(userRole === "ROLE_ADMIN" ? "ADMIN" : "HR");
+      setPassword("");
+    } catch (error) {
+      console.error("Login failed:", error);
+      setLoginError(
+        "Login failed. Check your credentials and backend connection."
+      );
     }
-
-    const data: {
-      token: string;
-      tokenType: string;
-      expiresIn: number;
-      email: string;
-      roles: string[];
-    } = await loginResponse.json();
-
-    // Step 2: Identify the role returned by Spring Security
-    const userRole = data.roles.find(
-      (authority) =>
-        authority === "ROLE_ADMIN" ||
-        authority === "ROLE_HR"
-    );
-
-    if (!userRole || !data.token) {
-      throw new Error("Invalid authentication response.");
-    }
-
-    // Step 3: Create the JWT Bearer authentication header
-    const bearerHeader = `${data.tokenType || "Bearer"} ${data.token}`;
-
-    // Step 4: Update application authentication state
-    setAuthHeader(bearerHeader);
-    setRole(userRole === "ROLE_ADMIN" ? "ADMIN" : "HR");
-    setPassword("");
-
-  } catch (error) {
-    console.error("Login failed:", error);
-    setLoginError(
-      "Login failed. Check your credentials and backend connection."
-    );
   }
-}
 
   function logout() {
     setAuthHeader("");
@@ -162,118 +158,118 @@ function App() {
   }
 
   async function loadAttendance() {
-  if (!authHeader) return;
+    if (!authHeader) return;
 
-  try {
-    const response = await fetch(
-      "http://localhost:8080/api/attendance",
-      {
-        headers: { Authorization: authHeader },
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/attendance`,
+        {
+          headers: { Authorization: authHeader },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Could not load attendance.");
       }
-    );
 
-    if (!response.ok) {
-      throw new Error("Could not load attendance.");
+      const data: Attendance[] = await response.json();
+      setAttendance(data);
+    } catch (err) {
+      console.error("Attendance loading failed:", err);
+      setError("Could not load attendance records.");
     }
-
-    const data: Attendance[] = await response.json();
-    setAttendance(data);
-  } catch (err) {
-    console.error("Attendance loading failed:", err);
-    setError("Could not load attendance records.");
   }
-}
 
-async function loadLeaves() {
-  if (!authHeader) return;
+  async function loadLeaves() {
+    if (!authHeader) return;
 
-  try {
-    const response = await fetch(
-      "http://localhost:8080/api/leaves",
-      {
-        headers: {
-          Authorization: authHeader,
-        },
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/leaves`,
+        {
+          headers: {
+            Authorization: authHeader,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Could not load leave applications.");
       }
-    );
 
-    if (!response.ok) {
-      throw new Error("Could not load leave applications.");
+      const data: Leave[] = await response.json();
+      setLeaves(data);
+    } catch (err) {
+      console.error("Leave loading failed:", err);
+      setError("Could not load leave applications.");
     }
-
-    const data: Leave[] = await response.json();
-    setLeaves(data);
-  } catch (err) {
-    console.error("Leave loading failed:", err);
-    setError("Could not load leave applications.");
   }
-}
 
-async function updateLeaveStatus(
-  leaveId: number,
-  status: "APPROVED" | "REJECTED"
-) {
-  try {
-    const response = await fetch(
-      `http://localhost:8080/api/leaves/${leaveId}/status?status=${status}`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: authHeader,
-        },
+  async function updateLeaveStatus(
+    leaveId: number,
+    status: "APPROVED" | "REJECTED"
+  ) {
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/leaves/${leaveId}/status?status=${status}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: authHeader,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "Unable to update leave status.");
       }
-    );
 
-    if (!response.ok) {
-      const message = await response.text();
-      throw new Error(message || "Unable to update leave status.");
+      await loadLeaves();
+    } catch (err) {
+      alert(
+        err instanceof Error
+          ? err.message
+          : "Could not update leave status."
+      );
     }
-
-    await loadLeaves();
-  } catch (err) {
-    alert(
-      err instanceof Error
-        ? err.message
-        : "Could not update leave status."
-    );
   }
-}
 
   async function checkOut(attendanceId: number) {
-  try {
-    const response = await fetch(
-      `http://localhost:8080/api/attendance/checkout/${attendanceId}`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: authHeader,
-        },
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/attendance/checkout/${attendanceId}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: authHeader,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "Unable to check out.");
       }
-    );
 
-    if (!response.ok) {
-      const message = await response.text();
-      throw new Error(message || "Unable to check out.");
+      await loadAttendance();
+      alert("Check-out recorded successfully!");
+    } catch (err) {
+      alert(
+        err instanceof Error
+          ? err.message
+          : "Could not complete check-out."
+      );
     }
-
-    await loadAttendance();
-    alert("Check-out recorded successfully!");
-  } catch (err) {
-    alert(
-      err instanceof Error
-        ? err.message
-        : "Could not complete check-out."
-    );
   }
-}
 
   useEffect(() => {
-  if (authHeader) {
-    loadEmployees();
-    loadAttendance();
-    loadLeaves();
-  }
-}, [authHeader]);
+    if (authHeader) {
+      loadEmployees();
+      loadAttendance();
+      loadLeaves();
+    }
+  }, [authHeader]);
 
   function handleChange(
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -339,7 +335,6 @@ async function updateLeaveStatus(
     if (!employee || employee.employmentStatus === "INACTIVE") {
       return;
     }
-    
 
     if (
       !window.confirm(
@@ -366,7 +361,7 @@ async function updateLeaveStatus(
     }
   }
 
-    async function activateEmployee(id: number) {
+  async function activateEmployee(id: number) {
     try {
       const response = await fetch(`${API}/${id}/activate`, {
         method: "PATCH",
@@ -438,88 +433,90 @@ async function updateLeaveStatus(
   return (
     <div className="app">
       <aside className="sidebar">
-  <div className="brand">
-    <div className="brand-icon">N</div>
-    <div>
-      <h2>NexusHR</h2>
-      <span>WORKFORCE INTELLIGENCE</span>
-    </div>
-  </div>
+        <div className="brand">
+          <div className="brand-icon">N</div>
+          <div>
+            <h2>NexusHR</h2>
+            <span>WORKFORCE INTELLIGENCE</span>
+          </div>
+        </div>
 
-    <p className="nav-heading">MAIN MENU</p>
+        <p className="nav-heading">MAIN MENU</p>
 
-<button
-  type="button"
-  className={`nav-item ${selectedPage === "Dashboard" ? "selected" : ""}`}
-  onClick={() => setSelectedPage("Dashboard")}
->
-  ▦ &nbsp; Dashboard
-</button>
+        <button
+          type="button"
+          className={`nav-item ${selectedPage === "Dashboard" ? "selected" : ""}`}
+          onClick={() => setSelectedPage("Dashboard")}
+        >
+          ▦ &nbsp; Dashboard
+        </button>
 
-<button
-  type="button"
-  className={`nav-item ${selectedPage === "Employees" ? "selected" : ""}`}
-  onClick={() => setSelectedPage("Employees")}
->
-  ♙ &nbsp; Employees
-</button>
+        <button
+          type="button"
+          className={`nav-item ${selectedPage === "Employees" ? "selected" : ""}`}
+          onClick={() => setSelectedPage("Employees")}
+        >
+          ♙ &nbsp; Employees
+        </button>
 
-<button
-  type="button"
-  className={`nav-item ${selectedPage === "Attendance" ? "selected" : ""}`}
-  onClick={() => setSelectedPage("Attendance")}
->
-  ◷ &nbsp; Attendance
-</button>
+        <button
+          type="button"
+          className={`nav-item ${selectedPage === "Attendance" ? "selected" : ""}`}
+          onClick={() => setSelectedPage("Attendance")}
+        >
+          ◷ &nbsp; Attendance
+        </button>
 
-<button
-  type="button"
-  className={`nav-item ${selectedPage === "Leave Management" ? "selected" : ""}`}
-  onClick={() => setSelectedPage("Leave Management")}
->
-  ▤ &nbsp; Leave Management
-</button>
-<button
-  className={`nav-item ${selectedPage === "Payroll" ? "active" : ""}`}
-  onClick={() => setSelectedPage("Payroll")}
->
-  ▧ &nbsp; Payroll
-</button>
-<button
-  type="button"
-  className={`nav-item ${
-    selectedPage === "Performance" ? "selected" : ""
-  }`}
-  onClick={() => setSelectedPage("Performance")}
->
-  ◈ &nbsp; Performance
-</button>
-  
- <button
-  type="button"
-  className={`nav-item ${
-    selectedPage === "Onboarding" ? "selected" : ""
-  }`}
-  onClick={() => setSelectedPage("Onboarding")}
->
-  ◉ &nbsp; Onboarding
-</button>
+        <button
+          type="button"
+          className={`nav-item ${selectedPage === "Leave Management" ? "selected" : ""}`}
+          onClick={() => setSelectedPage("Leave Management")}
+        >
+          ▤ &nbsp; Leave Management
+        </button>
 
-  <div className="sidebar-bottom">
-    <div className="profile-avatar">
-      {role === "ADMIN" ? "AD" : "HR"}
-    </div>
+        <button
+          className={`nav-item ${selectedPage === "Payroll" ? "active" : ""}`}
+          onClick={() => setSelectedPage("Payroll")}
+        >
+          ▧ &nbsp; Payroll
+        </button>
 
-    <div>
-      <strong>{role === "ADMIN" ? "Administrator" : "HR User"}</strong>
-      <span>{role} Account</span>
-    </div>
+        <button
+          type="button"
+          className={`nav-item ${
+            selectedPage === "Performance" ? "selected" : ""
+          }`}
+          onClick={() => setSelectedPage("Performance")}
+        >
+          ◈ &nbsp; Performance
+        </button>
 
-    <button className="action-btn" onClick={logout}>
-      Logout
-    </button>
-  </div>
-</aside>
+        <button
+          type="button"
+          className={`nav-item ${
+            selectedPage === "Onboarding" ? "selected" : ""
+          }`}
+          onClick={() => setSelectedPage("Onboarding")}
+        >
+          ◉ &nbsp; Onboarding
+        </button>
+
+        <div className="sidebar-bottom">
+          <div className="profile-avatar">
+            {role === "ADMIN" ? "AD" : "HR"}
+          </div>
+
+          <div>
+            <strong>{role === "ADMIN" ? "Administrator" : "HR User"}</strong>
+            <span>{role} Account</span>
+          </div>
+
+          <button className="action-btn" onClick={logout}>
+            Logout
+          </button>
+        </div>
+      </aside>
 
       <main className="main">
         <header className="topbar">
@@ -532,444 +529,436 @@ async function updateLeaveStatus(
             System Online
           </div>
         </header>
-{selectedPage === "Employees" && (
-        
+
+        {selectedPage === "Employees" && (
           <>
-        <section className="welcome">
-          <div>
-            <span className="eyebrow">HUMAN RESOURCES MANAGEMENT</span>
-            <h2>Welcome to NexusHR 👋</h2>
-            <p>Manage your workforce, people and organizational growth.</p>
-          </div>
-          <button className="primary-btn" onClick={openAddForm}>
-            + Add Employee
-          </button>
-        </section>
-
-        <section className="stats">
-          <div className="stat-card">
-            <span>Total Employees</span>
-            <h2>{employees.length}</h2>
-            <small>Registered workforce</small>
-          </div>
-          <div className="stat-card">
-            <span>Active Employees</span>
-            <h2>{activeCount}</h2>
-            <small>Currently active</small>
-          </div>
-          <div className="stat-card">
-            <span>Departments</span>
-            <h2>{departments}</h2>
-            <small>Unique departments</small>
-          </div>
-          <div className="stat-card">
-            <span>Inactive Employees</span>
-            <h2>{employees.length - activeCount}</h2>
-            <small>Other employment statuses</small>
-          </div>
-        </section>
-
-        <section className="directory">
-          <div className="section-header">
-            <div>
-              <h2>Employee Directory</h2>
-              <p>Manage and monitor your organization's workforce.</p>
-            </div>
-            <button
-  type="button"
-  className="secondary-btn"
-  onClick={() => {
-    alert("Refresh button clicked!");
-    loadLeaves();
-  }}
->
-  ↻ Refresh
-</button>
-          </div>
-
-          {error && <div className="error">{error}</div>}
-
-          {loading ? (
-            <p className="message">Loading employees...</p>
-          ) : employees.length === 0 ? (
-            <div className="empty">
-              <h3>No employees found</h3>
-              <p>Add your first employee to get started.</p>
+            <section className="welcome">
+              <div>
+                <span className="eyebrow">HUMAN RESOURCES MANAGEMENT</span>
+                <h2>Welcome to NexusHR 👋</h2>
+                <p>Manage your workforce, people and organizational growth.</p>
+              </div>
               <button className="primary-btn" onClick={openAddForm}>
                 + Add Employee
               </button>
-            </div>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>EMPLOYEE</th>
-                    <th>DEPARTMENT</th>
-                    <th>DESIGNATION</th>
-                    <th>JOINING DATE</th>
-                    <th>STATUS</th>
-                    <th>ACTIONS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {employees.map((employee) => (
-                    <tr key={employee.id}>
-                      <td>
-                        <strong>
-                          {employee.firstName} {employee.lastName}
-                        </strong>
-                        <span className="subtext">{employee.email}</span>
-                        <span className="subtext">{employee.employeeCode}</span>
-                      </td>
-                      <td>{employee.department}</td>
-                      <td>{employee.designation}</td>
-                      <td>{employee.joiningDate}</td>
-                      <td>
-                        <span className="status">
-                          {employee.employmentStatus}
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          className="action-btn"
-                          onClick={() => openEditForm(employee)}
-                        >
-                          Edit
-                        </button>
-                       {employee.employmentStatus !== "INACTIVE" && (
-  <button
-    className="delete-btn"
-    onClick={() => deactivateEmployee(employee.id)}
-  >
-    Deactivate
-  </button>
-)}
-{employee.employmentStatus === "INACTIVE" && (
-  <button
-    className="action-btn"
-    onClick={() => activateEmployee(employee.id)}
-  >
-    Reactivate
-  </button>
-)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+            </section>
+
+            <section className="stats">
+              <div className="stat-card">
+                <span>Total Employees</span>
+                <h2>{employees.length}</h2>
+                <small>Registered workforce</small>
+              </div>
+              <div className="stat-card">
+                <span>Active Employees</span>
+                <h2>{activeCount}</h2>
+                <small>Currently active</small>
+              </div>
+              <div className="stat-card">
+                <span>Departments</span>
+                <h2>{departments}</h2>
+                <small>Unique departments</small>
+              </div>
+              <div className="stat-card">
+                <span>Inactive Employees</span>
+                <h2>{employees.length - activeCount}</h2>
+                <small>Other employment statuses</small>
+              </div>
+            </section>
+
+            <section className="directory">
+              <div className="section-header">
+                <div>
+                  <h2>Employee Directory</h2>
+                  <p>Manage and monitor your organization's workforce.</p>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => {
+                    alert("Refresh button clicked!");
+                    loadLeaves();
+                  }}
+                >
+                  ↻ Refresh
+                </button>
+              </div>
+
+              {error && <div className="error">{error}</div>}
+
+              {loading ? (
+                <p className="message">Loading employees...</p>
+              ) : employees.length === 0 ? (
+                <div className="empty">
+                  <h3>No employees found</h3>
+                  <p>Add your first employee to get started.</p>
+                  <button className="primary-btn" onClick={openAddForm}>
+                    + Add Employee
+                  </button>
+                </div>
+              ) : (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>EMPLOYEE</th>
+                        <th>DEPARTMENT</th>
+                        <th>DESIGNATION</th>
+                        <th>JOINING DATE</th>
+                        <th>STATUS</th>
+                        <th>ACTIONS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {employees.map((employee) => (
+                        <tr key={employee.id}>
+                          <td>
+                            <strong>
+                              {employee.firstName} {employee.lastName}
+                            </strong>
+                            <span className="subtext">{employee.email}</span>
+                            <span className="subtext">{employee.employeeCode}</span>
+                          </td>
+                          <td>{employee.department}</td>
+                          <td>{employee.designation}</td>
+                          <td>{employee.joiningDate}</td>
+                          <td>
+                            <span className="status">
+                              {employee.employmentStatus}
+                            </span>
+                          </td>
+                          <td>
+                            <button
+                              className="action-btn"
+                              onClick={() => openEditForm(employee)}
+                            >
+                              Edit
+                            </button>
+                            {employee.employmentStatus !== "INACTIVE" && (
+                              <button
+                                className="delete-btn"
+                                onClick={() => deactivateEmployee(employee.id)}
+                              >
+                                Deactivate
+                              </button>
+                            )}
+                            {employee.employmentStatus === "INACTIVE" && (
+                              <button
+                                className="action-btn"
+                                onClick={() => activateEmployee(employee.id)}
+                              >
+                                Reactivate
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
           </>
-)}
-{selectedPage === "Dashboard" && (
-  <Dashboard
-    authHeader={authHeader}
-    employees={employees}
-  />
-)}
+        )}
 
-{selectedPage === "Attendance" && (
-  <section className="directory">
-    <div className="section-header">
-      <div>
-        <h2>Attendance Management</h2>
-        <p>View employee attendance and check-in records.</p>
-      </div>
+        {selectedPage === "Dashboard" && (
+          <Dashboard
+            authHeader={authHeader}
+            employees={employees}
+          />
+        )}
 
-      <button
-        className="secondary-btn"
-        onClick={loadAttendance}
-      >
-        ↻ Refresh
-      </button>
-    </div>
-<div className="attendance-actions">
-  <select
-    value={attendanceStatus}
-    onChange={(e) => setAttendanceStatus(e.target.value)}
-  >
-    <option value="PRESENT">Present</option>
-    <option value="ABSENT">Absent</option>
-    <option value="LEAVE">Leave</option>
-  </select>
+        {selectedPage === "Attendance" && (
+          <section className="directory">
+            <div className="section-header">
+              <div>
+                <h2>Attendance Management</h2>
+                <p>View employee attendance and check-in records.</p>
+              </div>
 
-  <select id="attendanceEmployee">
-  {employees
-    .filter((employee) => employee.employmentStatus === "ACTIVE")
-    .map((employee) => (
-      <option key={employee.id} value={employee.id}>
-        {employee.firstName} {employee.lastName}
-      </option>
-    ))}
-</select>
+              <button
+                className="secondary-btn"
+                onClick={loadAttendance}
+              >
+                ↻ Refresh
+              </button>
+            </div>
 
-  <button
-  className="primary-btn"
-  disabled={!employees.some(
-    (employee) => employee.employmentStatus === "ACTIVE"
-  )}
-  onClick={async () => {
-      const employeeId = (
-        document.getElementById("attendanceEmployee") as HTMLSelectElement
-      ).value;
+            <div className="attendance-actions">
+              <select
+                value={attendanceStatus}
+                onChange={(e) => setAttendanceStatus(e.target.value)}
+              >
+                <option value="PRESENT">Present</option>
+                <option value="ABSENT">Absent</option>
+                <option value="LEAVE">Leave</option>
+              </select>
 
-      try {
-        const response = await fetch(
-          `http://localhost:8080/api/attendance/mark/${employeeId}?status=${attendanceStatus}`,
-          {
-            method: "POST",
-            headers: { Authorization: authHeader },
-          }
-        );
+              <select id="attendanceEmployee">
+                {employees
+                  .filter((employee) => employee.employmentStatus === "ACTIVE")
+                  .map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.firstName} {employee.lastName}
+                    </option>
+                  ))}
+              </select>
 
-        if (!response.ok) {
-          alert("Could not mark attendance. Check whether attendance is already marked today.");
-          return;
-        }
+              <button
+                className="primary-btn"
+                disabled={!employees.some(
+                  (employee) => employee.employmentStatus === "ACTIVE"
+                )}
+                onClick={async () => {
+                  const employeeId = (
+                    document.getElementById("attendanceEmployee") as HTMLSelectElement
+                  ).value;
 
-        await loadAttendance();
-        alert("Attendance marked successfully!");
-      } catch {
-        alert("Unable to connect to the server.");
-      }
-    }}
-  >
-    + Mark Attendance
-  </button>
-</div>
+                  try {
+                    const response = await fetch(
+                      `${API_BASE}/api/attendance/mark/${employeeId}?status=${attendanceStatus}`,
+                      {
+                        method: "POST",
+                        headers: { Authorization: authHeader },
+                      }
+                    );
 
-    {attendance.length === 0 ? (
-      <div className="empty">
-        <h3>No attendance records found</h3>
-        <p>Mark attendance to see records here.</p>
-      </div>
-    ) : (
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>EMPLOYEE</th>
-              <th>DATE</th>
-              <th>STATUS</th>
-              <th>CHECK IN</th>
-              <th>CHECK OUT</th>
-              <th>WORKING HOURS</th>
-              <th>ACTIONS</th>
-            </tr>
-          </thead>
+                    if (!response.ok) {
+                      alert("Could not mark attendance. Check whether attendance is already marked today.");
+                      return;
+                    }
 
-          <tbody>
-           {attendance
-  .filter((record) => record.employee.employmentStatus === "ACTIVE")
-  .map((record) => (
-              <tr key={record.id}>
-                <td>
-                  {record.employee.firstName}{" "}
-                  {record.employee.lastName}
-                </td>
-                <td>{record.attendanceDate}</td>
-                <td>
-                  <span className="status">
-                    {record.status}
-                  </span>
-                </td>
-                <td>
-                  {record.checkIn
-                    ? new Date(record.checkIn).toLocaleTimeString()
-                    : "—"}
-                </td>
-                <td>
-  {record.checkOut
-    ? new Date(record.checkOut).toLocaleTimeString()
-    : "—"}
-</td>
+                    await loadAttendance();
+                    alert("Attendance marked successfully!");
+                  } catch {
+                    alert("Unable to connect to the server.");
+                  }
+                }}
+              >
+                + Mark Attendance
+              </button>
+            </div>
 
-<td>
-  {record.checkIn && record.checkOut
-    ? (() => {
-        const totalMinutes =
-          Math.floor(
-            (new Date(record.checkOut).getTime() -
-              new Date(record.checkIn).getTime()) / 60000
-          );
+            {attendance.length === 0 ? (
+              <div className="empty">
+                <h3>No attendance records found</h3>
+                <p>Mark attendance to see records here.</p>
+              </div>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>EMPLOYEE</th>
+                      <th>DATE</th>
+                      <th>STATUS</th>
+                      <th>CHECK IN</th>
+                      <th>CHECK OUT</th>
+                      <th>WORKING HOURS</th>
+                      <th>ACTIONS</th>
+                    </tr>
+                  </thead>
 
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = totalMinutes % 60;
+                  <tbody>
+                    {attendance
+                      .filter((record) => record.employee.employmentStatus === "ACTIVE")
+                      .map((record) => (
+                        <tr key={record.id}>
+                          <td>
+                            {record.employee.firstName}{" "}
+                            {record.employee.lastName}
+                          </td>
+                          <td>{record.attendanceDate}</td>
+                          <td>
+                            <span className="status">
+                              {record.status}
+                            </span>
+                          </td>
+                          <td>
+                            {record.checkIn
+                              ? new Date(record.checkIn).toLocaleTimeString()
+                              : "—"}
+                          </td>
+                          <td>
+                            {record.checkOut
+                              ? new Date(record.checkOut).toLocaleTimeString()
+                              : "—"}
+                          </td>
+                          <td>
+                            {record.checkIn && record.checkOut
+                              ? (() => {
+                                  const totalMinutes = Math.floor(
+                                    (new Date(record.checkOut).getTime() -
+                                      new Date(record.checkIn).getTime()) / 60000
+                                  );
 
-        return `${hours}h ${minutes}m`;
-      })()
-    : "In Progress"}
-</td>
+                                  const hours = Math.floor(totalMinutes / 60);
+                                  const minutes = totalMinutes % 60;
 
-<td>
-  {record.status === "PRESENT" &&
-    record.checkIn &&
-    !record.checkOut && (
-      <button
-        className="action-btn"
-        onClick={() => checkOut(record.id)}
-      >
-        Check Out
-      </button>
-    )}
+                                  return `${hours}h ${minutes}m`;
+                                })()
+                              : "In Progress"}
+                          </td>
+                          <td>
+                            {record.status === "PRESENT" &&
+                              record.checkIn &&
+                              !record.checkOut && (
+                                <button
+                                  className="action-btn"
+                                  onClick={() => checkOut(record.id)}
+                                >
+                                  Check Out
+                                </button>
+                              )}
 
-  {record.checkOut && (
-    <span className="status">Completed</span>
-  )}
-</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    )}
-  </section>
-)}
+                            {record.checkOut && (
+                              <span className="status">Completed</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
 
-{selectedPage === "Leave Management" && (
-  <section className="directory">
-    <div className="section-header">
-      <div>
-        <h2>Leave Management</h2>
-        <p>Review and manage employee leave applications.</p>
-      </div>
+        {selectedPage === "Leave Management" && (
+          <section className="directory">
+            <div className="section-header">
+              <div>
+                <h2>Leave Management</h2>
+                <p>Review and manage employee leave applications.</p>
+              </div>
 
-      <button className="secondary-btn" onClick={loadLeaves}>
-        ↻ Refresh
-      </button>
-    </div>
+              <button className="secondary-btn" onClick={loadLeaves}>
+                ↻ Refresh
+              </button>
+            </div>
 
-    <div className="attendance-actions">
-      <select
-        value={leaveFilter}
-        onChange={(e) => setLeaveFilter(e.target.value)}
-      >
-        <option value="ALL">All applications</option>
-        <option value="PENDING">Pending</option>
-        <option value="APPROVED">Approved</option>
-        <option value="REJECTED">Rejected</option>
-      </select>
-    </div>
+            <div className="attendance-actions">
+              <select
+                value={leaveFilter}
+                onChange={(e) => setLeaveFilter(e.target.value)}
+              >
+                <option value="ALL">All applications</option>
+                <option value="PENDING">Pending</option>
+                <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+            </div>
 
-    {leaves.filter(
-      (leave) =>
-        leaveFilter === "ALL" || leave.status === leaveFilter
-    ).length === 0 ? (
-      <div className="empty">
-        <h3>No leave applications found</h3>
-        <p>There are no applications in this category.</p>
-      </div>
-    ) : (
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>EMPLOYEE</th>
-              <th>LEAVE TYPE</th>
-              <th>DATES</th>
-              <th>DAYS</th>
-              <th>REASON</th>
-              <th>STATUS</th>
-              <th>REVIEWED BY</th>
-              <th>ACTIONS</th>
-            </tr>
-          </thead>
+            {leaves.filter(
+              (leave) =>
+                leaveFilter === "ALL" || leave.status === leaveFilter
+            ).length === 0 ? (
+              <div className="empty">
+                <h3>No leave applications found</h3>
+                <p>There are no applications in this category.</p>
+              </div>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>EMPLOYEE</th>
+                      <th>LEAVE TYPE</th>
+                      <th>DATES</th>
+                      <th>DAYS</th>
+                      <th>REASON</th>
+                      <th>STATUS</th>
+                      <th>REVIEWED BY</th>
+                      <th>ACTIONS</th>
+                    </tr>
+                  </thead>
 
-          <tbody>
-            {leaves
-              .filter(
-                (leave) =>
-                  leaveFilter === "ALL" ||
-                  leave.status === leaveFilter
-              )
-              .map((leave) => (
-                <tr key={leave.id}>
-                  <td>
-                    {leave.employee.firstName}{" "}
-                    {leave.employee.lastName}
-                    <span className="subtext">
-                      {leave.employee.employeeCode}
-                    </span>
-                  </td>
+                  <tbody>
+                    {leaves
+                      .filter(
+                        (leave) =>
+                          leaveFilter === "ALL" ||
+                          leave.status === leaveFilter
+                      )
+                      .map((leave) => (
+                        <tr key={leave.id}>
+                          <td>
+                            {leave.employee.firstName}{" "}
+                            {leave.employee.lastName}
+                            <span className="subtext">
+                              {leave.employee.employeeCode}
+                            </span>
+                          </td>
 
-                  <td>{leave.leaveType}</td>
+                          <td>{leave.leaveType}</td>
 
-                  <td>
-                    {leave.startDate} – {leave.endDate}
-                  </td>
+                          <td>
+                            {leave.startDate} – {leave.endDate}
+                          </td>
 
-                  <td>{leave.totalDays}</td>
+                          <td>{leave.totalDays}</td>
 
-                  <td>{leave.reason}</td>
+                          <td>{leave.reason}</td>
 
-                  <td>
-                    <span className="status">
-                      {leave.status}
-                    </span>
-                  </td>
+                          <td>
+                            <span className="status">
+                              {leave.status}
+                            </span>
+                          </td>
 
-                  <td>{leave.reviewedBy || "—"}</td>
+                          <td>{leave.reviewedBy || "—"}</td>
 
-                  <td>
-                    {leave.status === "PENDING" ? (
-                      <>
-                        <button
-                          className="action-btn"
-                          onClick={() =>
-                            updateLeaveStatus(
-                              leave.id,
-                              "APPROVED"
-                            )
-                          }
-                        >
-                          Approve
-                        </button>
+                          <td>
+                            {leave.status === "PENDING" ? (
+                              <>
+                                <button
+                                  className="action-btn"
+                                  onClick={() =>
+                                    updateLeaveStatus(leave.id, "APPROVED")
+                                  }
+                                >
+                                  Approve
+                                </button>
 
-                        <button
-                          className="delete-btn"
-                          onClick={() =>
-                            updateLeaveStatus(
-                              leave.id,
-                              "REJECTED"
-                            )
-                          }
-                        >
-                          Reject
-                        </button>
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      </div>
-    )}
-  </section>
-)
-}
+                                <button
+                                  className="delete-btn"
+                                  onClick={() =>
+                                    updateLeaveStatus(leave.id, "REJECTED")
+                                  }
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
 
-{selectedPage === "Payroll" && (
-  <Payroll authHeader={authHeader} />
-)}
+        {selectedPage === "Payroll" && (
+          <Payroll authHeader={authHeader} />
+        )}
 
-{selectedPage === "Performance" && (
-  <Performance
-    authHeader={authHeader}
-    employees={employees}
-  />
-)}
+        {selectedPage === "Performance" && (
+          <Performance
+            authHeader={authHeader}
+            employees={employees}
+          />
+        )}
 
-{selectedPage === "Onboarding" && (
-  <Onboarding
-    authHeader={authHeader}
-    employees={employees}
-  />
-)}
+        {selectedPage === "Onboarding" && (
+          <Onboarding
+            authHeader={authHeader}
+            employees={employees}
+          />
+        )}
 
         {showForm && (
           <div className="modal-overlay">
@@ -1050,7 +1039,5 @@ async function updateLeaveStatus(
     </div>
   );
 }
-
-
 
 export default App;
