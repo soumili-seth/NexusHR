@@ -62,14 +62,29 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers(HttpMethod.DELETE, "/api/employees/**")
-                    .hasRole("ADMIN")
-                .requestMatchers("/api/employees/**")
-                    .hasAnyRole("ADMIN", "HR")
-                .anyRequest().permitAll()
-            )
+            
+
+.authorizeHttpRequests(auth -> auth
+    // Allow browser CORS preflight requests
+    .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+    // Only ADMIN can delete onboarding records
+    .requestMatchers(HttpMethod.DELETE, "/api/onboarding/**")
+        .hasRole("ADMIN")
+
+    // Only ADMIN can delete performance reviews
+    .requestMatchers(HttpMethod.DELETE, "/api/performance/**")
+        .hasRole("ADMIN")
+
+    // All remaining API endpoints require ADMIN or HR
+    .requestMatchers("/api/**")
+        .hasAnyRole("ADMIN", "HR")
+
+    // Non-API resources such as frontend assets remain accessible
+    .anyRequest().permitAll()
+)
+
+            
             .httpBasic(Customizer.withDefaults());
 
         return http.build();
@@ -80,11 +95,14 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
 
         configuration.setAllowedOrigins(
-            List.of("http://localhost:5173")
+            List.of(
+    "http://localhost:5173",
+    "http://localhost:5174"
+)
         );
-        configuration.setAllowedMethods(
-            List.of("GET", "POST", "PUT", "DELETE", "OPTIONS")
-        );
+       configuration.setAllowedMethods(
+    List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+);
         configuration.setAllowedHeaders(
             List.of("Authorization", "Content-Type")
         );

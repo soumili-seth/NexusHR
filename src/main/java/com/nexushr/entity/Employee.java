@@ -117,7 +117,8 @@ public class Employee {
     private String department;
     private String designation;
     private LocalDate joiningDate;
-    private String employmentStatus;
+    @Column(name = "employment_status")
+private String employmentStatus;
     private LocalDateTime createdAt;
     @PrePersist
 protected void onCreate() {

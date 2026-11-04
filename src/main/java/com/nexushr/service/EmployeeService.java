@@ -15,10 +15,15 @@ public class EmployeeService {
     public EmployeeService(EmployeeRepository employeeRepository) {
         this.employeeRepository = employeeRepository;
     }
+public Employee saveEmployee(Employee employee) {
 
-    public Employee saveEmployee(Employee employee) {
-        return employeeRepository.save(employee);
+    if (employee.getEmploymentStatus() == null ||
+            employee.getEmploymentStatus().isBlank()) {
+        employee.setEmploymentStatus("ACTIVE");
     }
+
+    return employeeRepository.save(employee);
+}
 
     public List<Employee> getAllEmployees() {
         return employeeRepository.findAll();
@@ -47,7 +52,24 @@ public class EmployeeService {
     return employeeRepository.save(employee);
 }
 
-    public void deleteEmployee(Long id) {
-        employeeRepository.deleteById(id);
-    }
+    public Employee deactivateEmployee(Long id) {
+
+    Employee employee = employeeRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException(
+                    "Employee not found with ID: " + id));
+
+    employee.setEmploymentStatus("INACTIVE");
+
+    return employeeRepository.save(employee);
+}
+public Employee activateEmployee(Long id) {
+
+    Employee employee = employeeRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException(
+                    "Employee not found with ID: " + id));
+
+    employee.setEmploymentStatus("ACTIVE");
+
+    return employeeRepository.save(employee);
+}
 }

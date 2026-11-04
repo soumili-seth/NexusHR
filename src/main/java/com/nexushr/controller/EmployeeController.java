@@ -9,7 +9,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/employees")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = {
+    "http://localhost:5173",
+    "http://localhost:5174"
+})
 public class EmployeeController {
 
     private final EmployeeService employeeService;
@@ -37,12 +40,15 @@ public class EmployeeController {
     }
 
     // Delete employee
-    @DeleteMapping("/{id}")
-    public String deleteEmployee(@PathVariable Long id) {
-        employeeService.deleteEmployee(id);
-        return "Employee deleted successfully";
-    }
-
+    // Deactivate employee
+@PatchMapping("/{id}/deactivate")
+public Employee deactivateEmployee(@PathVariable Long id) {
+    return employeeService.deactivateEmployee(id);
+}
+@PatchMapping("/{id}/activate")
+public Employee activateEmployee(@PathVariable Long id) {
+    return employeeService.activateEmployee(id);
+}
     // Update employee
 @PutMapping("/{id}")
 public Employee updateEmployee(
